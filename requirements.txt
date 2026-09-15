@@ -1,0 +1,7 @@
+# 必需依赖
+opencv-python>=4.5
+numpy>=1.20
+
+# 可选（推荐）：安装 contrib 版可让细化提速约百倍
+# 注意：它与 opencv-python 二选一，安装前先 pip uninstall opencv-python
+# opencv-contrib-python>=4.5

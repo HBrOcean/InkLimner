@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用提问 / Questions & usage help
+    url: https://github.com/HBrOcean/inklimner/discussions
+    about: 不确定是 bug 还是用法问题？先在 Discussions 里问问。
+  - name: 使用说明 / Documentation
+    url: https://github.com/HBrOcean/inklimner#readme
+    about: 先看看 README 的参数表与 FAQ，多数问题都有答案。

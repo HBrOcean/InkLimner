@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inklimner"
+version = "3.3.0"
+description = "Convert raster images into pure-stroke SVG line art for laser cutting (single-line centerline output)."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Oceaniat" }]
+keywords = [
+    "svg", "laser-cutting", "laser-engraving", "vectorization",
+    "line-art", "lightburn", "potrace", "opencv", "xdog", "centerline",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+]
+dependencies = [
+    "opencv-python>=4.5",
+    "numpy>=1.20",
+]
+
+[project.optional-dependencies]
+fast = ["opencv-contrib-python>=4.5"]
+dev = ["pytest>=7", "ruff>=0.5", "Pillow>=9"]
+
+[project.urls]
+Homepage = "https://github.com/HBrOcean/inklimner"
+Repository = "https://github.com/HBrOcean/inklimner"
+Issues = "https://github.com/HBrOcean/inklimner/issues"
+Changelog = "https://github.com/HBrOcean/inklimner/blob/main/CHANGELOG.md"
+
+[project.scripts]
+inklimner = "inklimner:main"
+
+[tool.setuptools]
+py-modules = ["inklimner"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

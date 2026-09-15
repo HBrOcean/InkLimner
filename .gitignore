@@ -1,0 +1,41 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ---- Packaging / build ----
+build/
+dist/
+*.egg-info/
+.eggs/
+wheelhouse/
+*.spec
+
+# ---- Virtual env ----
+.venv/
+venv/
+env/
+
+# ---- Test / tooling caches ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- inklimner generated output ----
+output/
+input/
+*.preview.png
+
+# 保留 examples/ 下的示例产物（README 需要）
+!examples/*.svg
+!examples/*.png
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

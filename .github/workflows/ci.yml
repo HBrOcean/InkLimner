@@ -49,8 +49,14 @@ jobs:
       - name: Smoke test (GUI, headless)
         shell: bash
         run: |
-          if python -c "import PySide6" 2>/dev/null; then
-            QT_QPA_PLATFORM=offscreen python inklimner_gui_qt.py --selftest
-          else
+          if ! python -c "import PySide6" 2>/dev/null; then
             echo "PySide6 unavailable — skipping GUI self-check"
+            exit 0
           fi
+          python -c "from pathlib import Path; import PySide6; d=Path(PySide6.__file__).parent/'Qt'/'plugins'/'platforms'; print('Qt platform plugins:', sorted(p.name for p in d.iterdir()) if d.is_dir() else 'not found')"
+          # Linux / macOS 的 runner 没有显示器，必须走 offscreen；
+          # Windows runner 自带桌面会话，用默认平台更贴近真实运行环境。
+          if [ "$RUNNER_OS" = "Linux" ] || [ "$RUNNER_OS" = "macOS" ]; then
+            export QT_QPA_PLATFORM=offscreen
+          fi
+          python inklimner_gui_qt.py --selftest

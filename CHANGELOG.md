@@ -63,6 +63,11 @@
   抛出 `TypeError: 'bool' object is not iterable`，按钮完全点不动。
   现在按钮统一用 lambda 吃掉该参数，`add_files` 也会把 bool 视作「未提供路径」；
   并补了**回归测试**（真实 click 按钮 + 直接传 bool 两种路径）。
+- **修复 CI 在 Windows 上失败**（GUI 冒烟测试步骤）—— 根因是 `QT_QPA_PLATFORM=offscreen`
+  本是给**没有显示器**的 Linux / macOS runner 用的，Windows runner 自带桌面会话，
+  套上 offscreen 反而起不来。现在按平台区分；另外给 `--selftest` 加了**平台插件预检**：
+  指定的平台插件不存在时优雅回退到系统默认，而不是让 Qt 静默终止整个进程；
+  CI 里也会打印可用插件列表，方便下次一眼定位。
 - README（中/英）参数表、调参速查表与 FAQ 补充断线排查指引。
 
 ### Tests

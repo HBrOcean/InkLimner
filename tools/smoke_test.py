@@ -38,6 +38,16 @@ def find_gui(dist: Path) -> Path | None:
     return p if p.exists() else None
 
 
+def gui_env() -> dict:
+    """GUI 自检的运行环境。
+
+    无显示器的系统（Linux / macOS 的 CI runner）必须走 offscreen；
+    Windows runner 自带桌面会话，用默认平台更贴近真实运行环境
+    （实测 Windows 上套 offscreen 反而容易起不来）。
+    """
+    return {} if os.name == 'nt' else {'QT_QPA_PLATFORM': 'offscreen'}
+
+
 def run(cmd, env_extra=None, timeout=900) -> int:
     env = dict(os.environ)
     env.update(env_extra or {})
@@ -78,10 +88,13 @@ def main(argv=None) -> int:
     if gui is None:
         print('[smoke] 没找到 GUI 产物')
     else:
-        print('[smoke] GUI 无显示器自检（--selftest）')
-        code = run([gui, '--selftest'], {'QT_QPA_PLATFORM': 'offscreen'})
+        print('[smoke] GUI 自检（--selftest）')
+        code = run([gui, '--selftest'], gui_env())
+        if code and os.name == 'nt':
+            print('  默认平台没起来，改用 offscreen 再试一次…')
+            code = run([gui, '--selftest'], {'QT_QPA_PLATFORM': 'offscreen'})
         if code:
-            print('  ! GUI 自检未通过（CI 无显示器时偶发，仅供参考）')
+            print('  ! GUI 自检未通过（无显示器环境偶发，仅供参考）')
             if a.strict:
                 failures.append('gui-selftest')
 

@@ -1217,7 +1217,45 @@ class MainWindow(QMainWindow):
 
 # ============================= 入口 =============================
 
+def _ensure_platform_plugin() -> None:
+    """自检专用：若环境指定的 Qt 平台插件不存在，就回退到系统默认。
+
+    CI 上常见「Linux 需要 offscreen、Windows 不需要」的差异；若把 offscreen
+    硬套到没有该插件的平台，Qt 会直接终止进程（连报错都来不及打）。
+    这里先探一下插件目录，缺失就退回去，避免 CI 出现看不懂的崩溃。
+    """
+    want = os.environ.get('QT_QPA_PLATFORM', '').strip()
+    if not want:
+        return
+    try:
+        import PySide6
+        root = Path(PySide6.__file__).parent
+        platforms = None
+        for cand in (root / 'Qt' / 'plugins' / 'platforms',   # PySide6 6.x
+                     root / 'plugins' / 'platforms'):         # 旧版布局
+            if cand.is_dir():
+                platforms = cand
+                break
+        if platforms is None:
+            return
+        available = set()
+        for f in platforms.iterdir():
+            stem = f.stem
+            for prefix in ('libq', 'q'):
+                if stem.startswith(prefix):
+                    available.add(stem[len(prefix):])
+                    break
+        if available and want not in available:
+            print(f'[selftest] 本机没有 {want} 平台插件（可用：{sorted(available)}），'
+                  f'改用系统默认平台')
+            os.environ.pop('QT_QPA_PLATFORM', None)
+    except Exception:                                  # noqa: BLE001
+        pass
+
+
 def run(argv=None, selftest: bool = False) -> int:
+    if selftest:
+        _ensure_platform_plugin()
     app = QApplication.instance() or QApplication(list(argv or sys.argv[:1]))
     app.setApplicationName('InkLimner')
     # 先铺一层默认（浅色）底，避免窗口构建瞬间闪一下；真实主题由 MainWindow 应用

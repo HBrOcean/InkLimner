@@ -7,6 +7,7 @@ __pycache__/
 # ---- Packaging / build ----
 build/
 dist/
+release/
 *.egg-info/
 .eggs/
 wheelhouse/

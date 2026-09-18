@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-InkLimner —— 位图转 SVG 线稿（inklimner.py，最终整合版 v3.3）
+InkLimner —— 位图转 SVG 线稿（inklimner.py v3.4.1.1，含图形界面）
 
 模式：
   linedraw  XDoG 线稿 + 骨架中心线（默认，最像手绘线稿，激光只走单线）
@@ -32,6 +31,13 @@ v3.3 更新：
   6. 改用 logging；新增 -j/--jobs 控制并发与进度输出
   7. 支持 pip 安装与 `inklimner` 命令行入口（见 pyproject.toml）
 
+v3.4.1.1 更新（新增图形界面）：
+  1. 图形界面 inklimner_gui.py（Tkinter，零强制依赖）：参数随模式联动置灰、
+     参数预设、CLI 命令互转、拖拽导入、实时预览、原图/结果对比、双版本输出、
+     命名模板、环境状态条、配置记忆（~/.inklimner_gui.json）、高 DPI 适配
+  2. 新增 --gui，一条命令直接打开界面；新增 inklimner-gui 命令行入口
+  3. 抽出 build_parser() / plan_jobs()，CLI 与 GUI 共用同一套参数与输出规划
+
 依赖：pip install opencv-python numpy
 推荐（细化提速约百倍）：pip uninstall opencv-python && pip install opencv-contrib-python
 可选（仅 shape/multi 模式受益，需 potrace 1.9+）：安装 potrace
@@ -54,7 +60,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-__version__ = '3.3'
+__version__ = '3.4.1.1'
 __all__ = ['convert', 'main', 'build_svg', 'gather_inputs', 'find_potrace']
 
 log = logging.getLogger('inklimner')
@@ -165,7 +171,7 @@ def imread_cn(path, apply_orientation: bool = True) -> np.ndarray:
     flag = cv2.IMREAD_COLOR if is_palette_png else cv2.IMREAD_UNCHANGED
     img = cv2.imdecode(data, flag)
     if img is None:
-        raise IOError(f"无法读取图片: {path}")
+        raise OSError(f"无法读取图片: {path}")
     if apply_orientation:
         img = apply_exif(img, exif_orientation(data.tobytes()))
     return img
@@ -267,16 +273,38 @@ def _thin_zhang_suen(bw: np.ndarray) -> np.ndarray:
 
 # ---------------- 骨架 → 中心线 ----------------
 
+def _build_nbrs(pts):
+    """构建 8 邻接表，并剔除「对角捷径」冗余边。
+
+    浅斜率的 1px 骨架里，一个像素常会同时连到正前和斜前方的像素，
+    从而凭空出现 "度=3/4" 的假交叉点 —— 追踪时会被迫在那里断线。
+    规则：若对角邻点之外还存在正交公共邻点（可经由它绕过去），
+    则该对角边冗余，去掉后骨架自然成为干净的通路。
+    """
+    nbrs = {}
+    for (x, y) in pts:
+        ns = []
+        for dx, dy in _OFFS:
+            q = (x + dx, y + dy)
+            if q not in pts:
+                continue
+            if dx != 0 and dy != 0:
+                if (x + dx, y) in pts or (x, y + dy) in pts:
+                    continue
+            ns.append(q)
+        nbrs[(x, y)] = ns
+    return nbrs
+
+
 def trace_polylines(skel_bw: np.ndarray, min_len: int = 8,
-                    simplify: float = 0.001):
+                    simplify: float = 0.001, join_gap: float = 3.0):
     """1px 骨架 → [(折线坐标, 是否闭环), ...]（按位置排序，保证输出确定性）"""
     sk = skel_bw > 0
     ys, xs = np.nonzero(sk)
     pts = set(zip(xs.tolist(), ys.tolist()))
     if not pts:
         return []
-    nbrs = {p: [(p[0] + dx, p[1] + dy) for dx, dy in _OFFS
-                if (p[0] + dx, p[1] + dy) in pts] for p in pts}
+    nbrs = _build_nbrs(pts)
     deg = {p: len(n) for p, n in nbrs.items()}
     visited, frags = set(), []
 
@@ -300,12 +328,19 @@ def trace_polylines(skel_bw: np.ndarray, min_len: int = 8,
             if (p, q) not in visited:
                 frags.append(walk(p, q))
 
-    frags = [f for f in frags if len(f) >= min_len]      # 毛刺/碎段过滤
-    frags = _merge_fragments(frags, deg)                 # 断点拼接
+    # 顺序很关键：先补断口、再拼天然断点，最后才过滤毛刺。
+    # 否则「被噪声切碎的长线」会因每段都短于 min_len 而整条消失。
+    frags = [f for f in frags if len(f) >= 2]
+    if join_gap > 0:
+        frags = _join_gaps(frags, join_gap)              # ① 接上短断口
+    frags = _merge_fragments(frags, deg)                 # ② 拼度数为 2 的断点
+    if join_gap > 0:
+        frags = _join_gaps(frags, join_gap)              # ③ 拼接后可能又现可接端点
+    frags = [f for f in frags if len(f) >= min_len]      # ④ 最后才过滤毛刺/碎段
 
     out = []
     for pl in frags:
-        closed = (len(pl) >= 4 and deg[pl[0]] == 2 and deg[pl[-1]] == 2 and
+        closed = (len(pl) >= 4 and
                   abs(pl[0][0] - pl[-1][0]) <= 1 and
                   abs(pl[0][1] - pl[-1][1]) <= 1)        # 环形结构闭合
         arr = np.array(pl, np.float32).reshape(-1, 1, 2)
@@ -314,6 +349,100 @@ def trace_polylines(skel_bw: np.ndarray, min_len: int = 8,
             out.append((ap.reshape(-1, 2).astype(float), closed))
     out.sort(key=lambda pc: (float(pc[0][:, 0].min()),
                              float(pc[0][:, 1].min())))
+    return out
+
+
+def _out_dir(pts, which, k: int = 4):
+    """端点处「向外」的单位方向（which：0=起点，1=终点）"""
+    n = len(pts)
+    if n < 2:
+        return (0.0, 0.0)
+    if which == 0:
+        a, b = pts[0], pts[min(k, n - 1)]
+    else:
+        a, b = pts[max(0, n - 1 - k)], pts[-1]
+    vx, vy = float(b[0] - a[0]), float(b[1] - a[1])
+    m = (vx * vx + vy * vy) ** 0.5
+    return (vx / m, vy / m) if m > 1e-9 else (0.0, 0.0)
+
+
+def _join_gaps(frags, max_gap: float = 3.0, cos_thresh: float = 0.6):
+    """把端点足够近、且方向连贯的折线接起来（修复「线条被切断」）。
+
+    判定：从 a 的端点指向 b 的端点的方向，与**至少一侧**的前进方向夹角足够小
+    （允许另一侧是拐角）。这样既能补上直线/曲线上的断口，又不会把两条平行线粘死。
+    最后若某条链自身首尾可平滑相接，则补一个首点使其闭环。
+    """
+    chains = [list(f) for f in frags if len(f) >= 2]
+    if max_gap <= 0 or len(chains) < 2:
+        return _close_self(chains, max_gap, cos_thresh)
+    g2, cell = max_gap * max_gap, max(max_gap, 0.5)
+    while True:
+        ends = []
+        for i, c in enumerate(chains):
+            if not c:
+                continue
+            d0, d1 = _out_dir(c, 0), _out_dir(c, 1)
+            if d0 != (0.0, 0.0):
+                ends.append((i, 0, c[0], d0))
+            if d1 != (0.0, 0.0):
+                ends.append((i, 1, c[-1], d1))
+        buckets = {}
+        for idx, (_i, _w, pt, _d) in enumerate(ends):
+            buckets.setdefault((int(pt[0] // cell), int(pt[1] // cell)),
+                               []).append(idx)
+        best = None
+        for ai, (i, wi, pi, di) in enumerate(ends):
+            cx, cy = int(pi[0] // cell), int(pi[1] // cell)
+            for gx in (cx - 1, cx, cx + 1):
+                for gy in (cy - 1, cy, cy + 1):
+                    for bj in buckets.get((gx, gy), ()):
+                        if bj <= ai:
+                            continue
+                        j, wj, pj, dj = ends[bj]
+                        if i == j:
+                            continue
+                        vx, vy = pj[0] - pi[0], pj[1] - pi[1]
+                        d2 = vx * vx + vy * vy
+                        if d2 > g2 or d2 < 1e-12:
+                            continue
+                        ux, uy = vx / (d2 ** 0.5), vy / (d2 ** 0.5)
+                        # 端点朝向感知：接在「终点」后面取正号，接在「起点」前面取负号
+                        ta = ux * di[0] + uy * di[1]
+                        if wi == 0:
+                            ta = -ta
+                        tb = ux * dj[0] + uy * dj[1]
+                        if wj == 1:
+                            tb = -tb
+                        if max(ta, tb) < cos_thresh:
+                            continue
+                        if best is None or d2 < best[0]:
+                            best = (d2, i, wi, j, wj)
+        if best is None:
+            break
+        _, i, wi, j, wj = best
+        a = chains[i] if wi == 1 else chains[i][::-1]      # 让 a 以断口结尾
+        b = chains[j][::-1] if wj == 1 else chains[j]      # 让 b 以断口开头
+        chains[i] = a + b
+        chains[j] = []
+    return _close_self([c for c in chains if c], max_gap, cos_thresh)
+
+
+def _close_self(chains, max_gap: float, cos_thresh: float):
+    """首尾可平滑相接的链 → 补一个首点使其闭环"""
+    out = []
+    for c in chains:
+        if len(c) >= 4 and c[0] != c[-1]:
+            p0, p1 = c[0], c[-1]
+            vx, vy = p0[0] - p1[0], p0[1] - p1[1]
+            d2 = vx * vx + vy * vy
+            if 1e-12 < d2 <= max_gap * max_gap:
+                ux, uy = vx / (d2 ** 0.5), vy / (d2 ** 0.5)
+                d1, d0 = _out_dir(c, 1), _out_dir(c, 0)
+                if (ux * d1[0] + uy * d1[1] >= cos_thresh and
+                        ux * d0[0] + uy * d0[1] >= cos_thresh):
+                    c = c + [c[0]]
+        out.append(c)
     return out
 
 
@@ -444,7 +573,7 @@ def shape_body(gray: np.ndarray, a):
         try:
             th = int(a.threshold)
         except ValueError:
-            raise ValueError('--threshold 只能是 0~255 整数或 auto')
+            raise ValueError('--threshold 只能是 0~255 整数或 auto') from None
     if th is None:
         _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     else:
@@ -500,7 +629,8 @@ def line_body(gray: np.ndarray, a, mode: str) -> list:
         k = 2 * a.dilate + 1                             # 已修复：1 不再无效
         bw = cv2.dilate(bw, np.ones((k, k), np.uint8))
     skel = thinning(bw)
-    return trace_polylines(skel, a.min_line_len, a.simplify)
+    return trace_polylines(skel, a.min_line_len, a.simplify,
+                           getattr(a, 'join_gap', 0.0))
 
 
 # ---------------- SVG 组装 ----------------
@@ -661,12 +791,34 @@ def _init_worker(quiet: bool) -> None:
                         format='%(message)s', stream=sys.stdout)
 
 
-def main(argv=None) -> int:
+def plan_jobs(files, out):
+    """(图片列表, 输出路径或 None) → [(src, dst), ...]（CLI / GUI 共用）
+
+    - out 以 .svg 结尾且只有一个输入 → 直接写入该文件
+    - 其余情况 → 写入 out 目录（或原目录），文件名为 原文件名.svg
+    - out 是 .svg 但有多个输入 → 抛 ValueError
+    """
+    out = Path(out) if out else None
+    if out is not None and out.suffix.lower() == '.svg' and len(files) > 1:
+        raise ValueError(f'检测到 {len(files)} 个输入文件，'
+                         '请给出输出目录而非 .svg 文件')
+    jobs = []
+    for src in files:
+        if out is not None and len(files) == 1 and out.suffix.lower() == '.svg':
+            dst = out
+        else:
+            d = out if (out and out.suffix.lower() != '.svg') else src.parent
+            dst = d / (src.stem + '.svg')
+        jobs.append((src, Path(dst)))
+    return jobs
+
+
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        description='InkLimner：位图转 SVG 线稿（v3.3，中心线输出，激光切割推荐）',
+        description='InkLimner：位图转 SVG 线稿（v3.4.1.1，中心线输出，激光切割推荐）',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    ap.add_argument('inputs', nargs='+',
-                    help='图片/目录/通配符，可多个')
+    ap.add_argument('inputs', nargs='*',
+                    help='图片/目录/通配符，可多个（--gui 时可留空）')
     ap.add_argument('-o', '--output', default=None,
                     help='输出 SVG 文件（单张）或输出目录')
     ap.add_argument('--mode', choices=['linedraw', 'multi', 'shape', 'edge'],
@@ -689,6 +841,8 @@ def main(argv=None) -> int:
                     help='线条加粗半径 0~2（0=不加粗）')
     ap.add_argument('--min-line-len', type=int, default=8,
                     help='中心线最短长度 px（过滤毛刺）')
+    ap.add_argument('--join-gap', type=float, default=3.0,
+                    help='断线修复：端点相距 <= 该值(px) 且方向连贯时自动接上；0=关闭')
     ap.add_argument('--min-len', type=int, default=30,
                     help='闭合轮廓最小周长（shape/multi 无 potrace 时）')
     ap.add_argument('--min-band', type=int, default=30,
@@ -736,11 +890,21 @@ def main(argv=None) -> int:
                     help='安静模式，只输出错误')
     ap.add_argument('--version', action='version',
                     version=f'InkLimner {__version__}')
+    ap.add_argument('--gui', action='store_true',
+                    help='打开图形界面（忽略其余命令行参数）')
     ap.set_defaults(force=True)
-    a = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    a = build_parser().parse_args(argv)
 
     logging.basicConfig(level=logging.WARNING if a.quiet else logging.INFO,
                         format='%(message)s', stream=sys.stdout)
+
+    if a.gui:
+        from inklimner_gui import main as gui_main
+        return gui_main()
 
     if not hasattr(cv2, 'ximgproc'):
         log.info("[提示] 未安装 opencv-contrib-python，将使用内置纯 Python 细化"
@@ -751,24 +915,21 @@ def main(argv=None) -> int:
     log.info("[环境] potrace: %s%s", '可用' if pot else '未安装',
              '（linedraw/edge 模式不受影响）' if not pot else '')
 
+    if not a.inputs:
+        log.error('请提供至少一个输入（图片 / 目录 / 通配符），或用 --gui 打开界面')
+        return 2
+
     files = gather_inputs(a.inputs)
     if not files:
         log.error('未找到可处理的图片（支持 %s）', ' '.join(SUPPORTED))
         return 2
 
-    out = Path(a.output) if a.output else None
-    if out is not None and out.suffix.lower() == '.svg' and len(files) > 1:
-        log.error('检测到 %d 个输入文件，-o 请给出输出目录而非 .svg 文件', len(files))
+    try:
+        pairs = plan_jobs(files, Path(a.output) if a.output else None)
+    except ValueError as e:
+        log.error('%s', e)
         return 2
-
-    jobs = []
-    for src in files:
-        if out is not None and len(files) == 1 and out.suffix.lower() == '.svg':
-            dst = out
-        else:
-            d = out if (out and out.suffix.lower() != '.svg') else src.parent
-            dst = d / (src.stem + '.svg')
-        jobs.append((src, dst, a))
+    jobs = [(src, dst, a) for src, dst in pairs]
 
     total = len(jobs)
     if total > 1:

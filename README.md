@@ -2,12 +2,14 @@
   <img src="assets/cover.png" alt="InkLimner — raster to single-line SVG art for laser cutting" width="780">
 </p>
 
-# InkLimner —— 位图转 SVG 线稿工具（v3.3 · 激光切割用）
+# InkLimner —— 位图转 SVG 线稿工具（v3.4.1.1 · 激光切割用）
 
+![Version](https://img.shields.io/badge/version-3.4.1.1-0d9488)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 [![CI](https://github.com/HBrOcean/inklimner/actions/workflows/ci.yml/badge.svg)](https://github.com/HBrOcean/inklimner/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/badge/download-Releases-0d9488)](https://github.com/HBrOcean/inklimner/releases)
 
 将 PNG / JPG / JPEG / BMP / WEBP / TIF / TIFF 等常见位图转换为**纯描边、无填充**的
 SVG 矢量线稿，输出为**单线中心线**（激光只走一遍），可直接导入 LightBurn、LaserGRBL、
@@ -15,8 +17,9 @@ RDWorks、LaserMaker 等激光切割 / 雕刻软件使用。
 
 > 设计目标：用最简单的命令行流程，把「一张图」变成「一圈能切出来的线」。
 
-> 版本说明：本版为 **v3.3**，核心算法为 **XDoG 线稿 + 骨架中心线**，
+> 版本说明：本版为 **v3.4.1.1**，核心算法为 **XDoG 线稿 + 骨架中心线**，
 > 输出是细化后的**单线走线**，天生适合输出黑白线稿。
+> v3.4.1.1 起附带**图形界面**，命令行依旧完整可用。
 
 ---
 
@@ -29,7 +32,8 @@ RDWorks、LaserMaker 等激光切割 / 雕刻软件使用。
   - `shape` —— 色块轮廓（剪纸风，可借助 potrace 圆滑）
 - 📱 **EXIF 方向校正**：手机照片不再横竖颠倒（`--no-exif` 可关闭）
 - 🪄 **自动阈值**：`shape` 模式默认使用 Otsu 算法自动二值化
-- 🧹 **智能清理**：形态学闭运算补缝 + 碎段过滤 + 断点自动拼接（交叉点不再丢边）
+- 🧹 **智能清理 + 断线修复**：形态学闭运算补缝、碎段过滤；**断口按「端点距离 + 方向连贯」自动拼接**，
+  线条不再莫名断开、碎成多段（`--join-gap`，默认 `3.0`，`0`=关闭）
 - 📐 **平滑可调**：Catmull-Rom 三次贝塞尔平滑，0（硬朗折线）～ 1（圆滑曲线）
 - 📏 **真实尺寸**：`--px-per-mm` 或更直观的 `--dpi` 换算毫米，导入即得实际尺寸
 - ✂️ **裁白边 / 留白**：`--trim` 自动去掉四周空白，`--margin` 留边距（切割省料）
@@ -40,7 +44,26 @@ RDWorks、LaserMaker 等激光切割 / 雕刻软件使用。
 - 🧮 **物理尺寸稳定**：`--max-size` 降采样会自动补偿，毫米尺寸不受影响
 - 🔒 **输出确定性**：同输入产出逐字节一致，方便 diff 与版本管理
 - ⚡ **potrace 可选加速**：安装后 `shape` / `multi` 模式轮廓更圆滑
+- 🖥️ **图形界面（Qt / Tkinter 双外观）**：参数可视化 + 模式联动 + 实时预览 + 拖拽导入，
+  `inklimner_gui.py` 自动挑选可用界面（详见下文）
 - 🚀 **失败返回非零退出码**：便于脚本化 / CI 集成
+
+---
+
+## ⬇️ 直接下载（免安装 Python）
+
+不想装 Python、也不熟命令行？直接下打包好的程序：
+
+👉 **到 [Releases 页面](https://github.com/HBrOcean/inklimner/releases) 下载**
+
+| 下载 | 适合谁 |
+|:--|:--|
+| `InkLimner-*-gui.zip` | **图形界面版**：解压后双击 `InkLimner(.exe)` 就能用 |
+| `InkLimner-*-cli.zip` | **命令行版**：单个可执行文件，适合脚本、批处理 |
+
+Windows / macOS / Linux 三个平台都有，由 GitHub Actions 自动构建。
+程序没有代码签名证书，首次运行会被 SmartScreen（Windows）或 Gatekeeper（macOS）
+拦一下，按提示允许即可 —— 详见 [docs/BUILD.md](docs/BUILD.md)。
 
 ---
 
@@ -77,6 +100,15 @@ pip install opencv-contrib-python
 **可选（仅 `shape` / `multi` 模式受益）**——安装
 [potrace](http://potrace.sourceforge.net/)，需 **1.9+**（用到 `-O` 曲线优化选项）。
 未安装时自动退回 OpenCV 轮廓，不影响运行。
+
+**可选（图形界面）**——想要现代暗色界面：
+
+```bash
+pip install ".[gui]"          # PySide6，Qt 界面（推荐）
+```
+不装也行：`inklimner_gui.py` 会自动回退到零依赖的 Tkinter 界面。
+Tk 界面想让预览更清晰可再装 Pillow（`pip install ".[tk]"`），
+想支持拖拽可装 tkinterdnd2（`pip install ".[dnd]"`）。
 
 ### 方式三：Docker
 
@@ -119,6 +151,45 @@ python inklimner.py 图案.png --px-per-mm 11.81
 
 ---
 
+## 🖥️ 图形界面
+
+不想敲命令？直接用界面 —— 提供两种外观，启动时**自动挑一个能用的**：
+
+```bash
+python inklimner_gui.py       # 直接运行（优先 Qt，装不了再回退 Tkinter）
+python inklimner.py --gui     # 或从 CLI 启动
+inklimner-gui                 # pip 安装后
+python inklimner_gui.py --qt  # 强制用 Qt 版
+python inklimner_gui.py --tk  # 强制用 Tkinter 版
+```
+
+| 界面 | 外观 | 依赖 | 适用 |
+|:--|:--|:--|:--|
+| **Qt 版**（推荐）<br>`inklimner_gui_qt.py` | 现代暗色卡片式、原生拖拽、圆角控件 | `pip install "inklimner[gui]"`（PySide6） | Python 3.9+ |
+| **Tk 版**<br>`inklimner_gui_tk.py` | 简洁原生界面 | **零第三方依赖**（标准库 tkinter） | Python 3.8+ |
+
+两个界面**功能完全一致**，共用同一份参数规格、预设与执行逻辑（`inklimner_gui_core.py`），
+所以参数永远不会两边不一致。
+
+界面能力：
+
+- **浅色 / 深色双主题**：默认**浅色**，界面右上角一键切换深浅，选择会被记住（预览区、日志配色同步跟随）
+- **参数随模式联动**：选 `shape` 时自动灰掉 Canny / 灰带等无关项，只亮出真正生效的参数
+- **参数预设**：内置「剪纸轮廓 / 照片描线 / 手绘线稿 / 印章 / 小图补细节 / 灰度层次」，也可把自己的调参存成预设
+- **CLI 命令互转**：一键把当前设置导出成 `inklimner ...` 命令；也能粘贴别人的命令自动回填参数
+- **拖拽导入**：图片 / 文件夹直接拖进窗口（Qt 版原生支持；Tk 版需 `pip install "inklimner[dnd]"`）
+- **实时预览**：改参数自动重跑（单张小图、0.4s 防抖），所见即所得
+- **原图 / 结果对照**：左右并排，一眼看出调参效果
+- **双版本输出**：一次同时产出 `shape` 轮廓版和当前模式版
+- **命名模板**：如 `{name}_cut` → `图案_cut.svg`，避免覆盖源目录产物
+- **环境状态条**：顶部实时显示 potrace 与细化后端
+- **记忆配置**：窗口尺寸、上次目录、参数自动保存到 `~/.inklimner_gui.json`
+
+> Tk 版个别 Linux 发行版需补系统包：`sudo apt install python3-tk`
+> Qt 版想要更清晰的预览可再装 Pillow：`pip install "inklimner[tk]"`
+
+---
+
 ## 📖 详细用法
 
 ### 命令格式
@@ -145,6 +216,7 @@ python inklimner.py <输入...> [选项]   # 直接运行单文件
 | `--max-size` | `2400` | 处理分辨率最长边上限，`0`=不限制 |
 | `--dilate` | `0` | 线条加粗半径 0~2（`0`=不加粗） |
 | `--min-line-len` | `8` | 中心线最短长度 px（过滤毛刺） |
+| `--join-gap` | `3.0` | **断线修复**：端点相距 ≤ 该值(px) 且方向连贯时自动接上；`0`=关闭（linedraw / edge） |
 | `--min-len` | `30` | 闭合轮廓最小周长（shape / multi 无 potrace 时） |
 | `--min-band` | `30` | 灰度带最小面积（multi） |
 | `--band-max` | `200` | multi 灰度带覆盖上限 1~255（越大保留越多浅灰细节） |
@@ -240,6 +312,7 @@ python inklimner.py logo.png --mode shape --threshold 160 --no-potrace
 | 想要硬朗折线感 | `--smooth 0` |
 | 黑底白图提取不到 | 加 `--invert` |
 | 线条太细、易断 | `--dilate 1`（或 2） |
+| 线条莫名断开、碎成好几段 | 先调 `--join-gap 8`（默认 3，最大可到 20）；仍断则配合 `--dilate 1` |
 | 小图细节糊成一团 | `--scale 2`（低分辨率小图必备） |
 | 大图处理卡死 | `--max-size 1600`（降低最长边上限） |
 | 输出四周留白太多 | `--trim`（可选再 `--margin 5`） |
@@ -267,7 +340,9 @@ python inklimner.py logo.png --mode shape --threshold 160 --no-potrace
 A：多半是黑底浅色图被当成背景了，加 `--invert` 试试；或降低 `--threshold`。也可先用 `--preview` 看看提取结果。
 
 **Q：为什么轮廓有断开的小缺口？**
-A：可能是 `--min-line-len`（中心线）或 `--min-len`（闭合轮廓）设太大把真轮廓过滤了，调小试试；或关闭 `--blur`。
+A：优先调大 `--join-gap`（默认 `3.0`，可试 `8`）：端点相距在阈值内且方向连贯的线段会被自动接上，
+无需手动去 Inkscape 补线。若仍断，再排查 `--min-line-len`（中心线）或 `--min-len`（闭合轮廓）
+是否设太大把真轮廓过滤了，或关闭 `--blur`。
 
 **Q：手机拍的照片方向倒了？**
 A：v3.3 起默认按 EXIF 自动校正。若你要保留原始方向，加 `--no-exif`。
@@ -321,6 +396,10 @@ python inklimner.py examples/sample.png -o examples/sample_shape.svg --mode shap
 ```
 inklimner/
 ├── inklimner.py                  # 主程序（单文件，便于分发/打包）
+├── inklimner_gui.py              # 图形界面统一入口（自动选 Qt / Tk）
+├── inklimner_gui_qt.py           # Qt 界面（PySide6，现代暗色）
+├── inklimner_gui_tk.py           # Tkinter 界面（零第三方依赖）
+├── inklimner_gui_core.py         # 两个界面共享的参数规格与执行逻辑
 ├── pyproject.toml              # 打包与 inklimner 命令入口
 ├── requirements.txt            # 运行依赖
 ├── Makefile                    # 常用开发命令（make test / make build ...）
@@ -331,7 +410,9 @@ inklimner/
 ├── LICENSE                     # MIT
 ├── Dockerfile                  # 含 potrace 的容器镜像
 ├── assets/                     # 项目封面 / logo
+├── docs/BUILD.md               # 云打包说明（各平台安装包怎么来）
 ├── docs/releases/              # 各版本 Release 说明
+├── tools/                      # 打包 / 冒烟测试 / 版本号同步脚本（CI 用）
 ├── .github/                    # CI / 打包工作流 + issue / PR 模板
 ├── examples/                   # 示例输入与产出
 └── tests/                      # pytest 测试
@@ -342,9 +423,17 @@ inklimner/
 ## 🧪 开发与测试
 
 ```bash
-pip install -e ".[dev]"      # pytest / ruff / Pillow
-pytest -q                    # 运行测试
+pip install -e ".[dev]"      # pytest / ruff / Pillow / PySide6
+pytest -q                    # 运行测试（含 Qt 界面的 offscreen 构建测试）
 ruff check .                 # 代码检查
+
+# 无显示器环境也可自检图形界面（Linux 服务器 / CI 同样适用）
+QT_QPA_PLATFORM=offscreen python inklimner_gui_qt.py --selftest
+
+# 发版辅助（版本号散落在多处，用它一次改完，不会漏）
+python tools/bump_version.py            # 检查：版本号出现在哪些文件
+python tools/bump_version.py 3.4.2      # 同步：一条命令改完 20+ 处
+python tools/smoke_test.py              # 冒烟测试打出来的可执行文件
 ```
 
 ---

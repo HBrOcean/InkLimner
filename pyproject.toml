@@ -4,18 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inklimner"
-version = "3.3.0"
-description = "Convert raster images into pure-stroke SVG line art for laser cutting (single-line centerline output)."
+version = "3.4.1.1"
+description = "Turn raster images into pure-stroke, single-line SVG art for laser cutting — CLI + GUI, with DPI-accurate sizing and batch mode."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [{ name = "Oceaniat" }]
 keywords = [
     "svg", "laser-cutting", "laser-engraving", "vectorization",
-    "line-art", "lightburn", "potrace", "opencv", "xdog", "centerline",
+    "line-art", "lightburn", "potrace", "opencv", "xdog", "centerline", "gui",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications",
     "Intended Audience :: End Users/Desktop",
     "Intended Audience :: Manufacturing",
     "License :: OSI Approved :: MIT License",
@@ -35,7 +36,10 @@ dependencies = [
 
 [project.optional-dependencies]
 fast = ["opencv-contrib-python>=4.5"]
-dev = ["pytest>=7", "ruff>=0.5", "Pillow>=9"]
+gui = ["PySide6-Essentials>=6.5"]
+tk = ["Pillow>=9"]
+dnd = ["tkinterdnd2>=0.3"]
+dev = ["pytest>=7", "ruff>=0.5", "Pillow>=9", "PySide6-Essentials>=6.5"]
 
 [project.urls]
 Homepage = "https://github.com/HBrOcean/inklimner"
@@ -45,9 +49,16 @@ Changelog = "https://github.com/HBrOcean/inklimner/blob/main/CHANGELOG.md"
 
 [project.scripts]
 inklimner = "inklimner:main"
+inklimner-gui = "inklimner_gui:main"
 
 [tool.setuptools]
-py-modules = ["inklimner"]
+py-modules = [
+    "inklimner",
+    "inklimner_gui",
+    "inklimner_gui_core",
+    "inklimner_gui_qt",
+    "inklimner_gui_tk",
+]
 
 [tool.ruff]
 line-length = 100
@@ -55,7 +66,7 @@ target-version = "py38"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
-ignore = ["E501"]
+ignore = ["E501", "E741"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -2,12 +2,14 @@
   <img src="assets/cover.png" alt="InkLimner — raster to single-line SVG art for laser cutting" width="780">
 </p>
 
-# InkLimner — Raster-to-SVG Line-Art Converter (v3.3 · for Laser Cutting)
+# InkLimner — Raster-to-SVG Line-Art Converter (v3.4.1.1 · for Laser Cutting)
 
+![Version](https://img.shields.io/badge/version-3.4.1.1-0d9488)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 [![CI](https://github.com/HBrOcean/inklimner/actions/workflows/ci.yml/badge.svg)](https://github.com/HBrOcean/inklimner/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/badge/download-Releases-0d9488)](https://github.com/HBrOcean/inklimner/releases)
 
 Convert common raster images (PNG / JPG / JPEG / BMP / WEBP / TIF / TIFF) into
 **pure-stroke, fill-free** SVG vector line art. The output is a **single centerline**
@@ -17,9 +19,9 @@ RDWorks, LaserMaker and other laser cutting / engraving software.
 > Design goal: turn "one image" into "a ring of cuttable lines" with the simplest
 > possible command-line workflow.
 
-> Version note: this is **v3.3**. The core algorithm is **XDoG line-art + skeleton
+> Version note: this is **v3.4.1.1**. The core algorithm is **XDoG line-art + skeleton
 > centerline** — the output is a thinned **single-line trace**, ideal for producing
-> black-and-white line art.
+> black-and-white line art. Since v3.4.1.1 a **GUI** ships alongside the CLI.
 
 ---
 
@@ -32,7 +34,9 @@ RDWorks, LaserMaker and other laser cutting / engraving software.
   - `shape` — color-block contours (paper-cut style; can be smoothed via potrace)
 - 📱 **EXIF orientation correction**: phone photos are no longer rotated (`--no-exif` to disable)
 - 🪄 **Automatic threshold**: `shape` mode uses Otsu's method by default
-- 🧹 **Smart cleanup**: morphological closing + fragment filtering + automatic break re-joining (no lost edges at intersections)
+- 🧹 **Smart cleanup + gap repair**: morphological closing and fragment filtering; endpoints within
+  range whose directions line up are **joined automatically** — lines no longer break into pieces
+  (`--join-gap`, default `3.0`, `0`=off)
 - 📐 **Adjustable smoothing**: Catmull-Rom cubic Bézier smoothing, 0 (crisp polylines) to 1 (smooth curves)
 - 📏 **Real-world size**: `--px-per-mm`, or the friendlier `--dpi`, converts to millimeters
 - ✂️ **Trim / margin**: `--trim` removes surrounding whitespace; `--margin` adds a border (saves material)
@@ -43,7 +47,26 @@ RDWorks, LaserMaker and other laser cutting / engraving software.
 - 🧮 **Stable physical size**: `--max-size` downsampling is auto-compensated
 - 🔒 **Deterministic output**: identical bytes for identical input — friendly to diff / VCS
 - ⚡ **Optional potrace acceleration**: smoother `shape` / `multi` contours
+- 🖥️ **Graphical interface (Qt / Tkinter)**: visual mode-aware params, live preview, native
+  drag & drop — `inklimner_gui.py` picks whichever backend is available (see below)
 - 🚀 **Non-zero exit code on failure**: script- and CI-friendly
+
+---
+
+## ⬇️ Download (no Python required)
+
+Don't want to install Python or touch a terminal? Grab a prebuilt package:
+
+👉 **Download from the [Releases page](https://github.com/HBrOcean/inklimner/releases)**
+
+| Download | Best for |
+|:--|:--|
+| `InkLimner-*-gui.zip` | **Graphical build**: unzip, then double-click `InkLimner(.exe)` |
+| `InkLimner-*-cli.zip` | **CLI build**: one self-contained executable, great for scripts |
+
+Built for Windows / macOS / Linux by GitHub Actions. The binaries are unsigned, so the
+first launch is stopped once by SmartScreen (Windows) or Gatekeeper (macOS) — just allow
+it, as described in [docs/BUILD.md](docs/BUILD.md).
 
 ---
 
@@ -81,6 +104,15 @@ pip install opencv-contrib-python
 **Optional (benefits `shape` / `multi` only)** — install
 [potrace](http://potrace.sourceforge.net/), **1.9+** required (the `-O` option is used).
 Without it, OpenCV contours are used as a fallback.
+
+**Optional (graphical interface)** — for the modern dark UI:
+
+```bash
+pip install ".[gui]"          # PySide6 — the Qt interface (recommended)
+```
+Without it, `inklimner_gui.py` falls back to the zero-dependency Tkinter interface.
+For the Tk build you can add Pillow (`pip install ".[tk]"`) for sharper previews,
+and tkinterdnd2 (`pip install ".[dnd]"`) for drag & drop.
 
 ### Option 3 — Docker
 
@@ -123,6 +155,45 @@ python inklimner.py pattern.png --px-per-mm 11.81
 
 ---
 
+## 🖥️ Graphical interface
+
+Prefer clicking to typing? Two looks are shipped — the launcher **picks whichever works**:
+
+```bash
+python inklimner_gui.py       # run directly (Qt if available, else Tkinter)
+python inklimner.py --gui     # or launch it from the CLI
+inklimner-gui                 # after pip install
+python inklimner_gui.py --qt  # force the Qt build
+python inklimner_gui.py --tk  # force the Tkinter build
+```
+
+| Interface | Look | Dependency | Notes |
+|:--|:--|:--|:--|
+| **Qt** (recommended)<br>`inklimner_gui_qt.py` | Modern dark cards, native drag & drop | `pip install "inklimner[gui]"` (PySide6) | Python 3.9+ |
+| **Tk**<br>`inklimner_gui_tk.py` | Clean native widgets | **none** (stdlib tkinter) | Python 3.8+ |
+
+Both interfaces are **feature-identical**: they share one spec, one preset list and one
+execution path (`inklimner_gui_core.py`), so options can never drift apart.
+
+What it does:
+
+- **Light / dark themes** — **light by default**, switch in the top-right corner; your choice is remembered (preview panes and log colours follow along)
+- **Mode-aware controls** — pick `shape` and Canny/band options grey out; only the options that actually apply stay live
+- **Presets** — six built-ins (paper-cut, photo trace, hand-drawn line art, stamp, small-image detail, grayscale layers) plus your own saved presets
+- **CLI round-trip** — export the current settings as an equivalent `inklimner ...` command, or paste someone's command to refill every option
+- **Drag & drop** — drop images or folders onto the window (native in the Qt build; the Tk build needs `pip install "inklimner[dnd]"`)
+- **Live preview** — tweak a setting and it re-renders automatically (single small image, 0.4 s debounce)
+- **Before / after comparison** — see the source and the result side by side
+- **Dual output** — produce a `shape` outline version alongside the current mode in one run
+- **Filename template** — e.g. `{name}_cut` → `pattern_cut.svg`
+- **Environment bar** — potrace availability and thinning backend at a glance
+- **Remembers your setup** — window size, last folders, all options and custom presets in `~/.inklimner_gui.json`
+
+> Tk build on some Linux distros needs the system package: `sudo apt install python3-tk`
+> Qt build can render sharper previews with Pillow: `pip install "inklimner[tk]"`
+
+---
+
 ## 📖 Detailed Usage
 
 ### Command format
@@ -150,6 +221,7 @@ python inklimner.py <input...> [options]  # running the single file
 | `--max-size` | `2400` | Max longest-edge of the processing resolution; `0`=unlimited |
 | `--dilate` | `0` | Line-thickening radius 0–2 (`0`=off) |
 | `--min-line-len` | `8` | Minimum centerline length in px |
+| `--join-gap` | `3.0` | **Gap repair**: auto-join segment endpoints within this distance (px) when their directions line up; `0`=off (linedraw / edge) |
 | `--min-len` | `30` | Minimum closed-contour perimeter (shape / multi without potrace) |
 | `--min-band` | `30` | Minimum grayscale-band area (multi) |
 | `--band-max` | `200` | multi band coverage ceiling 1–255 (higher keeps more light-gray detail) |
@@ -247,6 +319,7 @@ python inklimner.py logo.png --mode shape --threshold 160 --no-potrace
 | Want crisp polylines | `--smooth 0` |
 | Light artwork on dark background not detected | add `--invert` |
 | Lines too thin / breaking | `--dilate 1` (or 2) |
+| Lines inexplicably cut into pieces | raise `--join-gap 8` first (default 3, up to 20); if still broken, pair with `--dilate 1` |
 | Small-image detail mushed | `--scale 2` |
 | Large image hangs | `--max-size 1600` |
 | Too much whitespace around the result | `--trim` (optionally `--margin 5`) |
@@ -274,7 +347,10 @@ python inklimner.py logo.png --mode shape --threshold 160 --no-potrace
 A: Likely light artwork on a dark background. Try `--invert`, or lower `--threshold`; check the extraction with `--preview`.
 
 **Q: Why are there small gaps in the contours?**
-A: `--min-line-len` (centerlines) or `--min-len` (closed contours) may be too large; lower it, or turn off `--blur`.
+A: Raise `--join-gap` first (default `3.0`; try `8`) — endpoints within the gap distance whose
+directions line up are joined automatically, so you no longer have to patch lines by hand in
+Inkscape. If gaps remain, check whether `--min-line-len` (centerlines) or `--min-len` (closed
+contours) is too large, or turn off `--blur`.
 
 **Q: My phone photo is rotated.**
 A: Since v3.3 the EXIF orientation is corrected by default. Add `--no-exif` to keep the raw orientation.
@@ -328,6 +404,10 @@ python inklimner.py examples/sample.png -o examples/sample_shape.svg --mode shap
 ```
 inklimner/
 ├── inklimner.py                  # main program (single file, easy to ship/package)
+├── inklimner_gui.py              # graphical interface launcher (picks Qt / Tk)
+├── inklimner_gui_qt.py           # Qt interface (PySide6, modern dark theme)
+├── inklimner_gui_tk.py           # Tkinter interface (zero third-party deps)
+├── inklimner_gui_core.py         # shared spec & execution used by both interfaces
 ├── pyproject.toml              # packaging + `inklimner` entry point
 ├── requirements.txt            # runtime dependencies
 ├── Makefile                    # common dev commands (make test / make build ...)
@@ -338,7 +418,9 @@ inklimner/
 ├── LICENSE                     # MIT
 ├── Dockerfile                  # image with potrace
 ├── assets/                     # project cover / logo
+├── docs/BUILD.md               # cloud-build guide (where the packages come from)
 ├── docs/releases/              # per-version release notes
+├── tools/                      # packaging / smoke-test / version-bump scripts (CI)
 ├── .github/                    # CI / build workflows + issue / PR templates
 ├── examples/                   # sample input & outputs
 └── tests/                      # pytest tests
@@ -349,9 +431,17 @@ inklimner/
 ## 🧪 Development & Testing
 
 ```bash
-pip install -e ".[dev]"      # pytest / ruff / Pillow
-pytest -q                    # run tests
+pip install -e ".[dev]"      # pytest / ruff / Pillow / PySide6
+pytest -q                    # run tests (includes headless Qt build test)
 ruff check .                 # lint
+
+# Headless GUI self-check (works on servers / CI too)
+QT_QPA_PLATFORM=offscreen python inklimner_gui_qt.py --selftest
+
+# Release helpers (the version string lives in many files — update them at once)
+python tools/bump_version.py            # check where the version appears
+python tools/bump_version.py 3.4.2      # sync every occurrence in one command
+python tools/smoke_test.py              # smoke-test the built executables
 ```
 
 ---

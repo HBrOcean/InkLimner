@@ -10,6 +10,10 @@ jobs:
   test:
     name: py${{ matrix.python-version }} @ ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Windows runner 的控制台默认是 cp1252，程序一旦 print 中文就会
+    # UnicodeEncodeError 直接崩 —— 统一强制 UTF-8
+    env:
+      PYTHONIOENCODING: utf-8
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +57,7 @@ jobs:
             echo "PySide6 unavailable — skipping GUI self-check"
             exit 0
           fi
-          python -c "from pathlib import Path; import PySide6; d=Path(PySide6.__file__).parent/'Qt'/'plugins'/'platforms'; print('Qt platform plugins:', sorted(p.name for p in d.iterdir()) if d.is_dir() else 'not found')"
+          python -c "from pathlib import Path; from PySide6.QtCore import QLibraryInfo as L; p=Path(L.path(L.LibraryPath.PluginsPath))/'platforms'; print('Qt platform plugins:', sorted(x.name for x in p.iterdir()) if p.is_dir() else 'not found at '+str(p))"
           # Linux / macOS 的 runner 没有显示器，必须走 offscreen；
           # Windows runner 自带桌面会话，用默认平台更贴近真实运行环境。
           if [ "$RUNNER_OS" = "Linux" ] || [ "$RUNNER_OS" = "macOS" ]; then

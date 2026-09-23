@@ -896,7 +896,22 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _force_utf8_output() -> None:
+    """把输出流切成 UTF-8。
+
+    Windows 终端默认是 cp1252 / charmap，直接 print 中文会抛
+    UnicodeEncodeError 把进程带崩（CI / 重定向输出时最常见）。
+    backslashreplace 兜底：极端环境下也只是显示成转义形式，不会崩。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='backslashreplace')
+        except Exception:                                     # noqa: BLE001
+            pass
+
+
 def main(argv=None) -> int:
+    _force_utf8_output()
     a = build_parser().parse_args(argv)
 
     logging.basicConfig(level=logging.WARNING if a.quiet else logging.INFO,

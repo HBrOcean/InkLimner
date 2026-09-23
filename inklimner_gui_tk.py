@@ -54,6 +54,7 @@ from inklimner_gui_core import (  # noqa: F401  (re-export)
     build_command,
     default_values,
     env_summary,
+    force_utf8_output,
     load_settings,
     parse_command,
     save_settings,
@@ -881,6 +882,7 @@ def make_root():
 
 def main(argv=None) -> int:
     """启动图形界面"""
+    force_utf8_output()          # 控制台编码兜底（非 UTF-8 环境打印中文会崩）
     try:
         root = make_root()
     except tk.TclError as e:

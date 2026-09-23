@@ -202,6 +202,24 @@ def save_settings(data: dict) -> None:
         pass
 
 
+def force_utf8_output() -> None:
+    """把标准输出 / 错误流切成 UTF-8。
+
+    英文版 Windows 的控制台默认是 cp1252（charmap），`print('中文')` 会抛
+    `UnicodeEncodeError` 并**直接让进程退出**（CI 上 Windows 两个 job 报的
+    `'charmap' codec can't encode character` 就是这个）。Linux / macOS 默认 UTF-8
+    因此没事；日志用 `logging` 没崩是因为它会吞掉编码异常，而 `print` 不会。
+    这里统一改成 UTF-8，并用 backslashreplace 兜底：即使某个环境仍不支持，
+    也只会显示成转义形式，绝不会崩。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8',
+                               errors='backslashreplace')       # py3.7+
+        except Exception:                                       # noqa: BLE001
+            pass
+
+
 def env_summary(extra: str = '') -> str:
     """环境状态条文字：potrace / 细化后端（+ 各界面自己补充的信息）"""
     pot = core.find_potrace()

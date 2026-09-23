@@ -85,6 +85,11 @@ def bump(old: str, new: str) -> int:
 
 
 def main(argv=None) -> int:
+    for _s in (sys.stdout, sys.stderr):            # Windows 终端编码兜底
+        try:
+            _s.reconfigure(encoding='utf-8', errors='backslashreplace')
+        except Exception:                          # noqa: BLE001
+            pass
     args = [a for a in (argv if argv is not None else sys.argv[1:])]
     ver = current_version()
     print(f'当前版本（来自 inklimner.py 的 __version__）：{ver}')

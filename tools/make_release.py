@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import platform
+import sys
 import zipfile
 from pathlib import Path
 
@@ -40,6 +41,11 @@ def zip_file(src: Path, out_zip: Path) -> None:
 
 
 def main(argv=None) -> int:
+    for _s in (sys.stdout, sys.stderr):            # Windows 终端编码兜底
+        try:
+            _s.reconfigure(encoding='utf-8', errors='backslashreplace')
+        except Exception:                          # noqa: BLE001
+            pass
     ap = argparse.ArgumentParser(description='打包 InkLimner 的发行 zip')
     ap.add_argument('--slug', default='',
                     help='平台标识（windows / macos / linux），默认按当前系统')

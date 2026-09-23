@@ -21,6 +21,15 @@ ROOT = Path(__file__).resolve().parent.parent
 WINDOWS = os.name == 'nt'
 
 
+def _force_utf8_output() -> None:
+    """Windows 终端默认 cp1252，本脚本自己也会 print 中文，先兜住"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='backslashreplace')
+        except Exception:                              # noqa: BLE001
+            pass
+
+
 def _exe(directory: Path, stem: str) -> Path:
     return directory / f'{stem}.exe' if WINDOWS else directory / stem
 
@@ -41,15 +50,17 @@ def find_gui(dist: Path) -> Path | None:
 def gui_env() -> dict:
     """GUI 自检的运行环境。
 
-    无显示器的系统（Linux / macOS 的 CI runner）必须走 offscreen；
-    Windows runner 自带桌面会话，用默认平台更贴近真实运行环境
-    （实测 Windows 上套 offscreen 反而容易起不来）。
+    Linux / macOS 的 CI runner 没有显示器，必须走 offscreen；
+    Windows runner 自带桌面会话，直接用默认平台更贴近真实运行环境。
+    （无论哪种，子进程都会被强制 UTF-8 —— 见 run()。）
     """
     return {} if os.name == 'nt' else {'QT_QPA_PLATFORM': 'offscreen'}
 
 
 def run(cmd, env_extra=None, timeout=900) -> int:
     env = dict(os.environ)
+    # Windows 终端默认 cp1252，被调用程序一旦 print 中文就会崩 —— 强制 UTF-8
+    env['PYTHONIOENCODING'] = 'utf-8'
     env.update(env_extra or {})
     print('$', ' '.join(str(c) for c in cmd), flush=True)
     try:
@@ -67,6 +78,7 @@ def run(cmd, env_extra=None, timeout=900) -> int:
 
 
 def main(argv=None) -> int:
+    _force_utf8_output()
     ap = argparse.ArgumentParser()
     ap.add_argument('--dist', default='dist')
     ap.add_argument('--strict', action='store_true',

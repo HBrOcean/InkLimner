@@ -46,6 +46,7 @@ from inklimner_gui_core import (  # noqa: E402, F401
     build_command,
     default_values,
     env_summary,
+    force_utf8_output,
     load_settings,
     parse_command,
     plan_pairs,
@@ -97,6 +98,7 @@ def run_tk() -> int:
 
 
 def main(argv=None) -> int:
+    force_utf8_output()          # Windows 终端编码兜底：否则打印中文直接崩
     args = list(sys.argv[1:] if argv is None else argv)
     forced = os.environ.get('INKLIMNER_GUI', '').strip().lower()
     for flag, name in (('--qt', 'qt'), ('--tk', 'tk')):

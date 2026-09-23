@@ -314,6 +314,15 @@ def _decimals_for(step) -> int:
     return len(text.split('.')[1]) if '.' in text else 0
 
 
+def _ascii(text) -> str:
+    """转成 ASCII 安全文本（非 ASCII 显示为 \\uXXXX）。
+
+    自检输出要经得起任何控制台编码（英文版 Windows 默认 cp1252），
+    这样即使环境变量没生效，也绝不会因打印中文而崩。
+    """
+    return str(text).encode('ascii', 'backslashreplace').decode('ascii')
+
+
 def pill(text: str, warn: bool = False) -> QLabel:
     lab = QLabel(text)
     lab.setObjectName('pillWarn' if warn else 'pill')
@@ -1165,14 +1174,17 @@ class MainWindow(QMainWindow):
     # ---------------- 自检 ----------------
 
     def _selftest(self, app: QApplication) -> int:
-        """无显示器（QT_QPA_PLATFORM=offscreen）下验证界面全链路"""
+        """无显示器（QT_QPA_PLATFORM=offscreen）下验证界面全链路。
+
+        输出刻意保持 ASCII —— 自检要在 Windows 的 cp1252 控制台上跑，
+        任何中文字符都可能变成 UnicodeEncodeError 把进程带崩。
+        """
         self._no_persist = True                        # 不污染用户配置
         self.apply_values({'mode': 'linedraw'})        # 固定参数，保证自检可复现
-        print('[selftest] 主题：', self.theme,
-              '| 全局样式表长度：', len(QApplication.instance().styleSheet()))
-        print('[selftest] 窗口构建成功：', self.windowTitle())
-        print('[selftest] 参数控件数量：', len(self.widgets),
-              '| 分组：', len(gc.GROUPS))
+        qss = len(QApplication.instance().styleSheet())
+        print(f'[selftest] theme={self.theme} qss_bytes={qss}')
+        print(f'[selftest] window ready: {_ascii(self.windowTitle())}')
+        print(f'[selftest] params={len(self.widgets)} groups={len(gc.GROUPS)}')
         sample = HERE / 'examples' / 'sample.png'
         if not sample.exists():                        # 打包成 exe 后没有 examples 目录
             sample = Path(tempfile.mkdtemp(prefix='inklimner_selftest_')) / 'sample.png'
@@ -1180,7 +1192,7 @@ class MainWindow(QMainWindow):
             core.cv2.circle(canvas, (110, 120), 60, (0, 0, 0), 3)
             core.cv2.rectangle(canvas, (190, 70), (290, 180), (0, 0, 0), 3)
             core.cv2.imwrite(str(sample), canvas)
-            print('[selftest] 未找到示例图片，已生成合成测试图：', sample)
+            print('[selftest] no examples/ dir - generated a synthetic test image')
         self.live_check.setChecked(False)               # 自检时不与实时预览抢线程
         self.add_files([str(sample)])
         self.widgets['preview'].setChecked(True)
@@ -1194,48 +1206,63 @@ class MainWindow(QMainWindow):
                 time.sleep(0.05)
             app.processEvents()
             out = sorted(Path(td).glob('*.svg'))
-            print('[selftest] 产出 SVG：', [p.name for p in out])
-            print('[selftest] 目录内容：', sorted(p.name for p in Path(td).iterdir()))
-            print('[selftest] tab索引：', self.tabs.currentIndex(),
-                  '| 结果有图：', self.result_view._src is not None,
-                  '| 对比有图：', self.cmp_result._src is not None,
-                  '| 原图有图：', self.source_view._src is not None)
-            print('[selftest] 日志末尾：', self.log.toPlainText().strip().splitlines()[-1:])
+            print(f'[selftest] output files: {sorted(p.name for p in Path(td).iterdir())}')
+            print(f'[selftest] tab={self.tabs.currentIndex()} '
+                  f'result={self.result_view._src is not None} '
+                  f'compare={self.cmp_result._src is not None} '
+                  f'source={self.source_view._src is not None}')
+            tail = self.log.toPlainText().strip().splitlines()[-1:]
+            print(f'[selftest] log tail: {_ascii(tail)}')
             if not out:
-                print('[selftest] 失败：没有产出 SVG')
+                print('[selftest] FAILED: no SVG produced')
                 return 1
             shot = os.environ.get('INKLIMNER_SHOT')
             if shot:
                 try:
                     self.grab().save(shot)
-                    print('[selftest] 界面截图已保存：', shot)
+                    print(f'[selftest] screenshot saved: {shot}')
                 except Exception as e:                 # noqa: BLE001
-                    print('[selftest] 截图失败：', e)
-        print('[selftest] 通过 ✓')
+                    print(f'[selftest] screenshot failed: {_ascii(e)}')
+        print('[selftest] PASS')
         return 0
 
 
 # ============================= 入口 =============================
+
+def _platform_plugin_dir() -> Path | None:
+    """找到 Qt 的平台插件目录（优先用 Qt 官方 API，跨平台最准）"""
+    try:
+        from PySide6.QtCore import QLibraryInfo
+        p = (Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))
+             / 'platforms')
+        if p.is_dir():
+            return p
+    except Exception:                                  # noqa: BLE001
+        pass
+    try:
+        import PySide6
+        root = Path(PySide6.__file__).parent
+        for cand in (root / 'Qt' / 'plugins' / 'platforms',   # PySide6 6.x
+                     root / 'plugins' / 'platforms'):         # 其它布局
+            if cand.is_dir():
+                return cand
+    except Exception:                                  # noqa: BLE001
+        pass
+    return None
+
 
 def _ensure_platform_plugin() -> None:
     """自检专用：若环境指定的 Qt 平台插件不存在，就回退到系统默认。
 
     CI 上常见「Linux 需要 offscreen、Windows 不需要」的差异；若把 offscreen
     硬套到没有该插件的平台，Qt 会直接终止进程（连报错都来不及打）。
-    这里先探一下插件目录，缺失就退回去，避免 CI 出现看不懂的崩溃。
+    这里先探一下插件目录，缺失就退回去，避免出现看不懂的崩溃。
     """
     want = os.environ.get('QT_QPA_PLATFORM', '').strip()
     if not want:
         return
     try:
-        import PySide6
-        root = Path(PySide6.__file__).parent
-        platforms = None
-        for cand in (root / 'Qt' / 'plugins' / 'platforms',   # PySide6 6.x
-                     root / 'plugins' / 'platforms'):         # 旧版布局
-            if cand.is_dir():
-                platforms = cand
-                break
+        platforms = _platform_plugin_dir()
         if platforms is None:
             return
         available = set()
@@ -1246,14 +1273,15 @@ def _ensure_platform_plugin() -> None:
                     available.add(stem[len(prefix):])
                     break
         if available and want not in available:
-            print(f'[selftest] 本机没有 {want} 平台插件（可用：{sorted(available)}），'
-                  f'改用系统默认平台')
+            print(f'[selftest] 本机没有 {want} 平台插件'
+                  f'（可用：{sorted(available)}），改用系统默认平台')
             os.environ.pop('QT_QPA_PLATFORM', None)
     except Exception:                                  # noqa: BLE001
         pass
 
 
 def run(argv=None, selftest: bool = False) -> int:
+    gc.force_utf8_output()       # Windows 终端编码兜底（自检会打印中文）
     if selftest:
         _ensure_platform_plugin()
     app = QApplication.instance() or QApplication(list(argv or sys.argv[:1]))

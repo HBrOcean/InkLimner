@@ -17,6 +17,8 @@ jobs:
     env:
       # tag 触发时用 tag 名（v3.4.1.1），手动触发时用 dev
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+      # Windows 控制台默认 cp1252，强制 UTF-8 免得打印中文时崩
+      PYTHONIOENCODING: utf-8
     strategy:
       fail-fast: false
       matrix:

@@ -1,7 +1,5 @@
 name: Build release packages
 
-# 手动触发：仓库 Actions 页面 → Build release packages → Run workflow
-# 打 tag 触发：git tag v3.4.1.1 && git push origin v3.4.1.1（会自动发布到 Releases）
 on:
   workflow_dispatch:
   push:
@@ -15,7 +13,6 @@ jobs:
     name: build-${{ matrix.slug }}
     runs-on: ${{ matrix.os }}
     env:
-      # tag 触发时用 tag 名（v3.4.1.1），手动触发时用 dev
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
       # Windows 控制台默认 cp1252，强制 UTF-8 免得打印中文时崩
       PYTHONIOENCODING: utf-8
@@ -56,17 +53,17 @@ jobs:
       - name: Smoke test the built executables
         run: python tools/smoke_test.py
 
-      - name: Package into zips
+
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          retention-days: 30
+
+      # ---------- 打成规范命名的 zip（给 Release 用） ----------
+      - name: Package release zips
         run: >
           python tools/make_release.py
           --slug ${{ matrix.slug }} --version ${{ env.RELEASE_TAG }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: InkLimner-${{ matrix.slug }}
-          path: release/*.zip
-          if-no-files-found: error
 
       - name: Publish to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -74,3 +71,15 @@ jobs:
         with:
           files: release/*.zip
           generate_release_notes: true
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## InkLimner ${{ env.RELEASE_TAG }} · ${{ matrix.slug }}"
+            echo ""
+            echo '```'
+            ls -lh dist/ 2>/dev/null || echo "(no dist)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

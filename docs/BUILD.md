@@ -1,36 +1,55 @@
 # 打包成各系统的应用程序（云打包）
 
-不用在自己电脑上装编译环境 —— **推一个 tag，GitHub 免费帮你把 Windows / macOS / Linux
-三个平台的安装包都构建好**，挂到 Releases 页面供下载。
+不用在自己电脑上装编译环境 —— **交给 GitHub 免费构建**：
+推代码会自动出构建产物（Artifacts），打 tag 会自动发布 Windows / macOS / Linux
+三个平台的安装包到 Releases。
 
 ---
 
-## 方式一：打 tag（推荐，自动发布到 Releases）
+## 方式一：推代码到 main（最省事，自动出 artifacts）
+
+直接：
+
+```bash
+git push origin main
+```
+
+推上去就会自动构建三个平台，产物在该次运行的 **Artifacts** 区（保留 **30 天**）。
+适合"随时想拿一个最新版试试"。
+
+## 方式二：手动触发（想指定时机时用）
+
+仓库页 → **Actions** → 左侧选 **Build release packages** → 右侧 **Run workflow** →
+选分支 → **Run workflow**。同样在 **Artifacts** 区下载。
+
+## 方式三：打 tag（发正式版，自动发布到 Releases）
 
 ```bash
 git tag v3.4.1.1
 git push origin v3.4.1.1
 ```
 
-几分钟后打开 `https://github.com/<你的用户名>/inklimner/releases`，就能看到带着
-各组安装包的发行版（Release）。
-
-## 方式二：手动触发（只拿产物，不发 Release）
-
-仓库页 → **Actions** → 左侧选 **Build release packages** → 右侧 **Run workflow** →
-选分支 → **Run workflow**。
-
-构建完成后，进入那次运行的页面，在底部 **Artifacts** 区域下载压缩包
-（GitHub 保留 90 天）。
+这是**唯一**会把产物发布到 Releases 页面的方式，适合对外发版。
 
 ---
 
-## 会产出什么
+## 产物在哪、长什么样
+
+**① Artifacts 区**（推 main / 手动触发时）—— 每个平台两个包：
+
+| Artifact 名 | 下载解压后 |
+|:--|:--|
+| `InkLimner-<版本>-<平台>-gui` | 直接就是 `InkLimner.exe` + `_internal/`，**双击 exe 即用** |
+| `InkLimner-<版本>-<平台>-cli` | 单个可执行文件（`inklimner` / `inklimner.exe`） |
+
+（macOS 的 gui 包里是 `InkLimner.app`）
+
+**② Releases 页面**（打 tag 时）—— 规范命名的 zip：
 
 | 文件 | 内容 | 大小（参考） |
 |:--|:--|:--|
-| `InkLimner-<版本>-<平台>-gui.zip` | 图形界面版：解压后双击 `InkLimner(.exe)` 即用 | 约 200 MB（解压约 380 MB） |
-| `InkLimner-<版本>-<平台>-cli.zip` | 命令行版：单个可执行文件，适合脚本/批处理 | 约 105 MB |
+| `InkLimner-<版本>-<平台>-gui.zip` | 图形界面版：解压后双击 `InkLimner(.exe)` 即用 | 约 210 MB（解压约 380 MB） |
+| `InkLimner-<版本>-<平台>-cli.zip` | 命令行版：单个可执行文件 | 约 105 MB |
 
 `<平台>` 为 `windows` / `macos` / `linux`。
 

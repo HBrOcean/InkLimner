@@ -26,6 +26,11 @@
 - **云端打包（GitHub Actions）** —— 推 `v*` tag 即自动构建 **Windows / macOS / Linux**
   三平台的**免安装包**并发布到 Releases（`…-gui.zip` 图形界面版、`…-cli.zip` 命令行版）；
   也可在 Actions 页面手动触发、只取产物
+  - **推送到 main 也会自动构建**，产物直接出现在该次运行的 **Artifacts** 区（保留 30 天），
+    不用打 tag 就能随时拿最新构建
+  - **Artifacts 按「平台 + 类型」分开**（`InkLimner-<版本>-<平台>-gui` / `-cli`），
+    下载解压后**直接就是可执行文件 / 文件夹**，不用再扒一层 zip
+  - 每个 job 结束时会在运行摘要里列出产物清单与体积，一眼看清打出了什么
   - 顺手排掉一个打包坑：`inklimner.py` 的 `--gui` 分支会让 PyInstaller 把整个 Qt 打进
     CLI 包（实测 160 MB），现在 CLI 版排除 PySide6，稳定在 ~105 MB；
     GUI 用**目录包**而非单文件，启动快得多（单文件每次启动都要解压几百 MB）

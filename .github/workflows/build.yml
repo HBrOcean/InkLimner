@@ -1,8 +1,14 @@
 name: Build release packages
 
+# 三种触发方式，任选：
+#   1. 推代码到 main  → 自动构建，产物在该次运行的 Artifacts 里（30 天有效）
+#   2. 手动触发       → 仓库 Actions 页面 → Build release packages → Run workflow
+#   3. 打 tag         → git tag v3.4.1.1 && git push origin v3.4.1.1
+#                       构建完会自动发布到 Releases 页面（含规范命名的 zip）
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
@@ -13,6 +19,7 @@ jobs:
     name: build-${{ matrix.slug }}
     runs-on: ${{ matrix.os }}
     env:
+      # tag 触发 → 用 tag 名（v3.4.1.1）；推 main / 手动触发 → dev
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
       # Windows 控制台默认 cp1252，强制 UTF-8 免得打印中文时崩
       PYTHONIOENCODING: utf-8
@@ -22,10 +29,16 @@ jobs:
         include:
           - os: windows-latest
             slug: windows
+            cli_path: dist/inklimner.exe
+            gui_path: dist/InkLimner
           - os: macos-latest
             slug: macos
+            cli_path: dist/inklimner
+            gui_path: dist/InkLimner.app
           - os: ubuntu-latest
             slug: linux
+            cli_path: dist/inklimner
+            gui_path: dist/InkLimner
     steps:
       - uses: actions/checkout@v4
 
@@ -53,9 +66,20 @@ jobs:
       - name: Smoke test the built executables
         run: python tools/smoke_test.py
 
-
+      # ---------- 上传 artifacts（下载后解压即可直接运行） ----------
+      - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
+          name: InkLimner-${{ env.RELEASE_TAG }}-${{ matrix.slug }}-cli
+          path: ${{ matrix.cli_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload GUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InkLimner-${{ env.RELEASE_TAG }}-${{ matrix.slug }}-gui
+          path: ${{ matrix.gui_path }}
           if-no-files-found: error
           retention-days: 30
 

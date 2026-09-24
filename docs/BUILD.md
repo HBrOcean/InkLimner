@@ -73,12 +73,14 @@ git push origin v3.4.1.1
 ```bash
 pip install opencv-python-headless numpy pyinstaller PySide6-Essentials
 
-# CLI：单文件
+# CLI：单文件（输出到 dist/cli）
 python -m PyInstaller --noconfirm --onefile --name inklimner \
+    --distpath dist/cli --workpath build/cli \
     --exclude-module PySide6 --exclude-module shiboken6 inklimner.py
 
-# GUI：目录包（用目录而非单文件，启动快很多）
+# GUI：目录包（输出到 dist/gui；用目录而非单文件，启动快很多）
 python -m PyInstaller --noconfirm --name InkLimner --windowed \
+    --distpath dist/gui --workpath build/gui \
     --exclude-module tkinter --exclude-module PIL inklimner_gui.py
 
 # 冒烟测试：确认打出来的东西真能跑（含 GUI 无显示器自检）
@@ -88,7 +90,12 @@ python tools/smoke_test.py
 python tools/make_release.py --slug windows --version v3.4.1.1
 ```
 
-产物在 `dist/`，zip 在 `release/`。
+产物在 `dist/cli`（命令行版）与 `dist/gui`（界面版），zip 在 `release/`。
+
+> **为什么分成两个目录？** macOS 的文件系统**不区分大小写** —— `inklimner`（命令行版）
+> 和 `InkLimner`（界面版）会被当成同一个名字，放同一个目录里会互相顶掉，
+> 表现为构建"成功"了但产物不见了、冒烟测试报 `PermissionError`。
+> 冒烟测试与打包脚本会在 `dist/`、`dist/cli`、`dist/gui` 三处自动探测，两种布局都能用。
 
 > **PyInstaller 不能交叉编译**：Windows 的 exe 必须在 Windows 上构建，
 > macOS 的包必须在 macOS 上构建 —— 这正是要交给 GitHub Actions 的原因。

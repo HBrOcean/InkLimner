@@ -26,19 +26,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # ⚠️ CLI 与 GUI 必须输出到不同目录（dist/cli、dist/gui）：
+        #    macOS 文件系统不区分大小写，inklimner(CLI) 与 InkLimner(GUI)
+        #    算同一个名字 —— 后构建的 GUI 会顶掉 CLI 产物，冒烟测试执行时报
+        #    PermissionError: [Errno 13]（路径变成了一个目录）。
         include:
           - os: windows-latest
             slug: windows
-            cli_path: dist/inklimner.exe
-            gui_path: dist/InkLimner
+            cli_path: dist/cli/inklimner.exe
+            gui_path: dist/gui/InkLimner
           - os: macos-latest
             slug: macos
-            cli_path: dist/inklimner
-            gui_path: dist/InkLimner.app
+            cli_path: dist/cli/inklimner
+            gui_path: dist/gui/InkLimner.app
           - os: ubuntu-latest
             slug: linux
-            cli_path: dist/inklimner
-            gui_path: dist/InkLimner
+            cli_path: dist/cli/inklimner
+            gui_path: dist/gui/InkLimner
     steps:
       - uses: actions/checkout@v4
 
@@ -54,12 +58,14 @@ jobs:
       - name: Build CLI (single file)
         run: >
           python -m PyInstaller --noconfirm --onefile --name inklimner
+          --distpath dist/cli --workpath build/cli
           --exclude-module PySide6 --exclude-module shiboken6
           inklimner.py
 
       - name: Build GUI (folder bundle, double-click to run)
         run: >
           python -m PyInstaller --noconfirm --name InkLimner --windowed
+          --distpath dist/gui --workpath build/gui
           --exclude-module tkinter --exclude-module PIL
           inklimner_gui.py
 
@@ -103,7 +109,15 @@ jobs:
           {
             echo "## InkLimner ${{ env.RELEASE_TAG }} · ${{ matrix.slug }}"
             echo ""
+            echo "| 产物 | 路径 | 大小 |"
+            echo "|---|---|---|"
+            for p in "${{ matrix.cli_path }}" "${{ matrix.gui_path }}"; do
+              sz=$(du -sh "$p" 2>/dev/null | cut -f1)
+              echo "| \`$(basename "$p")\` | \`$p\` | ${sz:-缺失} |"
+            done
+            echo ""
+            echo "### dist 树"
             echo '```'
-            ls -lh dist/ 2>/dev/null || echo "(no dist)"
+            find dist -maxdepth 2 2>/dev/null || echo "(no dist)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

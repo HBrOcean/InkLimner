@@ -35,16 +35,36 @@ def _exe(directory: Path, stem: str) -> Path:
 
 
 def find_cli(dist: Path) -> Path | None:
-    p = _exe(dist, 'inklimner')
-    return p if p.exists() else None
+    """产物可能在 dist/ 下，也可能在 dist/cli（CI 的布局）。
+
+    CI 之所以分开存放，是因为 macOS 文件系统不区分大小写 ——
+    inklimner(CLI) 与 InkLimner(GUI) 算同一个名字，放同一个目录会互相顶掉。
+    """
+    for base in (dist, dist / 'cli'):
+        p = _exe(base, 'inklimner')
+        if p.is_file():                 # is_file：目录不算数（曾因此误判）
+            return p
+    return None
 
 
 def find_gui(dist: Path) -> Path | None:
-    app = dist / 'InkLimner.app' / 'Contents' / 'MacOS' / 'InkLimner'
-    if app.exists():
-        return app
-    p = _exe(dist / 'InkLimner', 'InkLimner')
-    return p if p.exists() else None
+    for base in (dist, dist / 'gui'):
+        app = base / 'InkLimner.app' / 'Contents' / 'MacOS' / 'InkLimner'
+        if app.is_file():
+            return app
+        p = _exe(base / 'InkLimner', 'InkLimner')
+        if p.is_file():
+            return p
+    return None
+
+
+def ensure_executable(p: Path) -> None:
+    """Unix 下补上可执行位 —— zip / artifact 流转时权限位常常会丢"""
+    if os.name != 'nt':
+        try:
+            p.chmod(p.stat().st_mode | 0o755)
+        except OSError:
+            pass
 
 
 def gui_env() -> dict:
@@ -93,6 +113,7 @@ def main(argv=None) -> int:
         print('[smoke] 没找到 CLI 产物')
         failures.append('cli-missing')
     else:
+        ensure_executable(cli)
         print('[smoke] CLI --version')
         if run([cli, '--version']):
             failures.append('cli-version')
@@ -100,6 +121,7 @@ def main(argv=None) -> int:
     if gui is None:
         print('[smoke] 没找到 GUI 产物')
     else:
+        ensure_executable(gui)
         print('[smoke] GUI 自检（--selftest）')
         code = run([gui, '--selftest'], gui_env())
         if code and os.name == 'nt':

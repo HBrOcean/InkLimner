@@ -59,16 +59,25 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     made = []
 
-    for name in ('inklimner.exe', 'inklimner'):
-        exe = dist / name
-        if exe.exists():
+    def candidates(*names: str) -> list[Path]:
+        """产物可能在 dist/ 下，也可能在 dist/cli、dist/gui 下（CI 的布局）。
+
+        CI 分开存放是因为 macOS 文件系统不区分大小写：inklimner(CLI)
+        与 InkLimner(GUI) 算同一个名字，放一起会互相顶掉。
+        """
+        found: list[Path] = []
+        for base in (dist, dist / 'cli', dist / 'gui'):
+            found += [base / n for n in names]
+        return found
+
+    for exe in candidates('inklimner.exe', 'inklimner'):
+        if exe.is_file():
             z = out / f'InkLimner-{a.version}-{slug}-cli.zip'
             zip_file(exe, z)
             made.append(z)
             break
 
-    for name in ('InkLimner.app', 'InkLimner'):
-        bundle = dist / name
+    for bundle in candidates('InkLimner.app', 'InkLimner'):
         if bundle.exists():
             z = out / f'InkLimner-{a.version}-{slug}-gui.zip'
             zip_dir(bundle, z)

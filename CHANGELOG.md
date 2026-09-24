@@ -79,6 +79,14 @@
   - `--selftest` 的输出改为 **ASCII 安全**（动态中文自动转义），任何编码的控制台下都不会崩
   - 顺带修正 `--selftest` 的平台插件探测：改用 Qt 官方 `QLibraryInfo` 取插件目录
     （原先写死的路径在部分平台不存在），插件缺失时优雅回退而非让 Qt 静默终止
+- **修复 CI 在 macOS 上失败**（GUI 冒烟测试步骤，报 `PermissionError: [Errno 13]`）——
+  真因是 **macOS 文件系统不区分大小写**：命令行产物 `inklimner` 与界面产物 `InkLimner`
+  被当成同一个名字，后一步构建的 GUI 把 CLI 顶换成了一个目录，冒烟测试去执行它，
+  自然报「权限不足」。（Windows 的 CLI 带 `.exe` 后缀、Linux 大小写敏感，所以只有 macOS 中招。）
+  修复：两类产物改为输出到各自目录（`dist/cli` 与 `dist/gui`）互不干扰；
+  `tools/smoke_test.py` 与 `tools/make_release.py` 会自动在 `dist/`、`dist/cli`、`dist/gui`
+  三处探测产物（本地照旧平铺在 `dist/`）；冒烟测试另加两道防护 —— 产物是目录就不算命中，
+  以及 Unix 下自动补可执行位（zip / artifact 流转容易丢权限位）。
 - README（中/英）参数表、调参速查表与 FAQ 补充断线排查指引。
 
 ### Tests
